@@ -1,5 +1,6 @@
 #!/bin/bash
-# Desenho do Boto-FM em ASCII Art
+APP_PATH=$(dirname "$(readlink -f "$0")")
+[ -f "$APP_PATH/version.sh" ] && source "$APP_PATH/version.sh"
 
 # Cores para o Logo
 CYAN='\033[36;1m'
@@ -24,5 +25,6 @@ printf "\e[49m           \e[38;2;95;57;63;49m▄\e[38;2;232;104;153;49m▄\e[38;
 \e[49m              \e[48;2;232;100;150m \e[38;2;185;104;133;48;2;233;101;151m▄\e[49;38;2;161;93;110m▀\e[49m               \e[m
 \e[49m             \e[49;38;2;226;110;153m▀\e[49m                  \e[m
 ";
-echo "            BOTO FILE MANAGER - VERSION 1.0        "
+echo -e "          BOTO FILE MANAGER: ${FG_YELLOW}${BOTO_VERSION}${RESET}"
+echo "-------------------------------------------"
 echo -e "${RESET}"

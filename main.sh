@@ -3,11 +3,10 @@
 # --- CONFIGURAÇÃO DE CAMINHO ---
 APP_PATH=$(dirname "$(readlink -f "$0")")
 
-# --- FUNÇÃO DE SAÍDA (SALVA DIRETÓRIO PARA O ALIAS) ---
+# --- FUNÇÃO DE SAÍDA ---
 TERM_STATE=$(stty -g)
 cleanup() {
     stty "$TERM_STATE"
-    # Salva o diretório atual em um arquivo temporário para o terminal ler ao sair
     pwd > /tmp/boto_last_dir
     chmod 777 /tmp/boto_last_dir 2>/dev/null
     clear
@@ -15,39 +14,52 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
-# --- CARREGAR CONFIGURAÇÕES ---
-# Padrões de segurança (caso o config.sh seja apagado ou esteja incompleto)
+# --- 1. CARREGAR IDENTIDADE E VERSÃO (PRIMEIRO DE TUDO) ---
+[ -f "$APP_PATH/version.sh" ] && source "$APP_PATH/version.sh"
+
+# --- 2. VERIFICAÇÃO DE UPDATE EM BACKGROUND ---
+# Limpa sinalizador antigo antes de começar
+rm -f /tmp/boto_update_ready
+(
+    REPO_VERSION_URL="https://raw.githubusercontent.com/urglenio/boto/main/version.sh"
+    TMP_VERSION="/tmp/boto_remote_version.sh"
+    curl -s -m 5 "$REPO_VERSION_URL" -o "$TMP_VERSION"
+    if [ -f "$TMP_VERSION" ]; then
+        REMOTE_BUILD=$(grep "BOTO_BUILD=" "$TMP_VERSION" | cut -d'"' -f2 | tr -d '[:space:]')
+        # Se o build remoto for maior que o local (que veio do version.sh acima)
+        if [ "$REMOTE_BUILD" -gt "$BOTO_BUILD" ] 2>/dev/null; then
+            touch /tmp/boto_update_ready
+        fi
+    fi
+) &
+
+# --- 3. CARREGAR CORES E CONFIGURAÇÕES ---
 BG_BLUE='\033[44m'; FG_WHITE='\033[37;1m'; FG_YELLOW='\033[33;1m'; FG_GREEN='\033[32;1m'
 RESET='\033[0m'; HIGHLIGHT='\033[47;30m'; INFOBG='\033[40;37m'; FG_CYAN='\033[36;1m'
 TL="+"; TR="+"; BL="+"; BR="+"; HL="-"; VL="|"; DIV="+"; B_DIV="+"
 MAX_VIEW=15
 COL_LARGURA=30
 
-# Carrega as configurações reais do arquivo
-if [ -f "$APP_PATH/config.sh" ]; then
-    source "$APP_PATH/config.sh"
-fi
+[ -f "$APP_PATH/config.sh" ] && source "$APP_PATH/config.sh"
 
 # Variáveis de Navegação
 CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
 FOCO="PASTAS"
 FILTRO=""
 
-# Função auxiliar para mover cursor
 mover_cursor() { printf "\033[%s;%sH" "$1" "$2"; }
 
-# --- EXIBIR LOGO DE ENTRADA ---
+# --- EXIBIR LOGO ---
 if [ -f "$APP_PATH/logo.sh" ]; then
     bash "$APP_PATH/logo.sh"
     sleep 2
 fi
 
 while true; do
-    # Atualiza o nome da pasta atual no cabeçalho
     NOME_PASTA_ATUAL=$(basename "$(pwd)")
     [ "$NOME_PASTA_ATUAL" == "/" ] && NOME_PASTA_ATUAL="RAIZ"
 
-    # 1. COLETA DE DADOS FILTRADA
+    # 1. COLETA DE DADOS
     LISTA_BRUTA=$(ls -1F --group-directories-first 2>/dev/null | grep -i "$FILTRO")
     PASTAS=("..")
     mapfile -t -O 1 PASTAS < <(echo "$LISTA_BRUTA" | grep '/$')
@@ -55,14 +67,30 @@ while true; do
 
     total_p=${#PASTAS[@]}; total_a=${#ARQUIVOS[@]}
 
-    # Ajuste de cursores
     [ $CURSOR_P -ge $total_p ] && CURSOR_P=$((total_p - 1))
     [ $CURSOR_A -ge $total_a ] && CURSOR_A=$((total_a - 1))
     [ $CURSOR_P -lt 0 ] && CURSOR_P=0; [ $CURSOR_A -lt 0 ] && CURSOR_A=0
 
     clear
-    # --- INTERFACE ---
+
+    # --- 1. CABEÇALHO COM NOTIFICAÇÃO DE UPDATE ---
+    UPDATE_STYLE="${FG_WHITE}"
+    AVISO_UPDATE=""
+    if [ -f /tmp/boto_update_ready ]; then
+        UPDATE_STYLE="\033[1;5;32m"
+        AVISO_UPDATE=" [UPDATE DISPONÍVEL!]"
+    fi
+
     LARGURA_TOTAL=$((COL_LARGURA * 2 + 5))
+    printf "${BG_BLUE}${UPDATE_STYLE} 🐬 BOTO-FM v%-10s %s ${RESET}\n" "$BOTO_VERSION" "$AVISO_UPDATE"
+
+    # --- 2. BARRA DE NAVEGAÇÃO ---
+    CAMINHO_ATUAL=$(pwd)
+    IFACE_PATH="${CAMINHO_ATUAL}"
+    [ ${#IFACE_PATH} -gt $((LARGURA_TOTAL-2)) ] && IFACE_PATH="...${IFACE_PATH: -$((LARGURA_TOTAL-6))}"
+    printf "${HIGHLIGHT} 📂 %-$(($LARGURA_TOTAL-2))s ${RESET}\n" "$IFACE_PATH"
+
+    # --- 3. DESENHO DA JANELA ---
     printf "${BG_BLUE}${FG_WHITE}%s%s%s${RESET}\n" "$TL" "$(printf '%*s' "$LARGURA_TOTAL" | tr ' ' "$HL")" "$TR"
 
     TIT_P=" DIRETORIOS "; [ "$FOCO" == "PASTAS" ] && TIT_P="> DIRETORIOS <"
@@ -72,11 +100,9 @@ while true; do
     printf "${BG_BLUE}${FG_WHITE}${VL} %-$(($COL_LARGURA+1))s ${VL} %-$(($COL_LARGURA+1))s ${VL}${RESET}\n" "$TIT_P" "$TIT_A"
     printf "${BG_BLUE}${FG_WHITE}${VL}%s%s%s${VL}${RESET}\n" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")"
 
-    # --- LISTAGEM ---
+    # --- 4. LISTAGEM ---
     for ((i=0; i<MAX_VIEW; i++)); do
         echo -ne "${BG_BLUE}${FG_WHITE}${VL} "
-
-        # Coluna Pastas
         IDX_P=$((i + OFFSET_P))
         if [ $IDX_P -lt $total_p ]; then
             N_P="${PASTAS[$IDX_P]:0:$COL_LARGURA}"
@@ -92,7 +118,6 @@ while true; do
 
         echo -ne " ${VL} "
 
-        # Coluna Arquivos
         IDX_A=$((i + OFFSET_A))
         if [ $IDX_A -lt $total_a ]; then
             N_A="${ARQUIVOS[$IDX_A]:0:$COL_LARGURA}"
@@ -107,28 +132,31 @@ while true; do
         else printf "%-$(($COL_LARGURA+1))s" ""; fi
         echo -e " ${VL}${RESET}"
     done
+
+    # --- 5. BORDA INFERIOR ---
     printf "${BG_BLUE}${FG_WHITE}%s%s%s%s%s${RESET}\n" "$BL" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$B_DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$BR"
 
-    # --- BARRA DE STATUS ---
+    # --- 6. BARRA DE STATUS ---
     if [ -n "$FILTRO" ]; then
         echo -e "${HIGHLIGHT} BUSCANDO: $FILTRO (ESC para limpar) ${RESET}"
     else
         [ "$FOCO" == "PASTAS" ] && ALVO="${PASTAS[$CURSOR_P]}" || ALVO="${ARQUIVOS[$CURSOR_A]}"
         ALVO_LIMPO=$(echo "$ALVO" | tr -d '*/')
         if [ -n "$ALVO" ] && [ -e "$ALVO_LIMPO" ]; then
-            PERM=$(stat -c '%A' "$ALVO_LIMPO"); TAM=$([ -d "$ALVO_LIMPO" ] && echo "DIR" || ls -lh "$ALVO_LIMPO" | awk '{print $5}')
+            PERM=$(stat -c '%A' "$ALVO_LIMPO")
+            TAM=$([ -d "$ALVO_LIMPO" ] && echo "DIR" || ls -lh "$ALVO_LIMPO" | awk '{print $5}')
             echo -e "${INFOBG} PERM: $PERM | TAM: $TAM | DATA: $(stat -c '%y' "$ALVO_LIMPO" | cut -c1-16) ${RESET}"
         fi
     fi
-    echo -e "${FG_CYAN} [/] Buscar [N] Pasta [M] Menu [C] Config [TAB] Lado [Q] Sair ${RESET}"
+    echo -e "${FG_CYAN} [/] Buscar [N] Pasta [M] Menu [C] Config [TAB] Lado [K] Ir para [Q] Sair ${RESET}"
 
-    # --- CAPTURA DE TECLAS ---
+    # --- 7. CAPTURA DE TECLAS ---
     stty -icanon -echo
     tecla=$(dd bs=1 count=1 2>/dev/null)
     stty "$TERM_STATE"
 
     case "$tecla" in
-        "/") # BUSCA
+        "/")
             mover_cursor 1 1; echo -ne "\033[2K ${FG_CYAN}Buscar por: ${RESET}"
             stty echo icanon; read TERMO; stty -echo -icanon
             if [ -n "$TERMO" ]; then
@@ -153,24 +181,38 @@ while true; do
             fi
             CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0 ;;
 
-        "n"|"N") # NOVA PASTA
+        "n"|"N")
             printf "\033[1;1H\033[2K${FG_YELLOW} Nome da nova pasta: ${RESET}"
             stty echo icanon; read nova_pasta; stty -echo -icanon
             [ -n "$nova_pasta" ] && mkdir -p "$nova_pasta" ;;
 
-        "m"|"M") # MENU DE AÇÕES
+        "m"|"M")
             [ "$FOCO" == "PASTAS" ] && ALVO_M=$(echo "${PASTAS[$CURSOR_P]}" | tr -d '*/') || ALVO_M=$(echo "${ARQUIVOS[$CURSOR_A]}" | tr -d '*/')
             [ -n "$ALVO_M" ] && [ "$ALVO_M" != ".." ] && bash "$APP_PATH/menu.sh" "$ALVO_M" ;;
 
-        "c"|"C") # GERENCIADOR DE CONFIGURAÇÕES
+        "k"|"K")
+            mover_cursor 2 1
+            echo -ne "${BG_YELLOW}${FG_BLACK} IR PARA: ${RESET} "
+            stty echo icanon
+            read -e -i "$(pwd)/" destino
+            stty -echo -icanon
+            if [ -d "$destino" ]; then
+                cd "$destino"
+                CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
+            else
+                mover_cursor 2 1
+                echo -ne "${FG_RED} ❌ Caminho não encontrado! ${RESET}"
+                sleep 0.8
+            fi ;;
+
+        "c"|"C")
             if [ -f "$APP_PATH/config_manager.sh" ]; then
                 bash "$APP_PATH/config_manager.sh"
-                # Recarrega as configurações para aplicar as mudanças de cores/tamanho na hora
                 source "$APP_PATH/config.sh"
                 CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
             fi ;;
 
-        $'\x1b') # SETAS E ESC
+        $'\x1b')
             FILTRO=""
             read -rsn2 -t 0.01 resto
             case "$resto" in
@@ -186,10 +228,9 @@ while true; do
                       fi ;;
             esac ;;
 
-        $'\t') # ALTERNAR COLUNAS
-            [ "$FOCO" == "PASTAS" ] && FOCO="ARQUIVOS" || FOCO="PASTAS" ;;
+        $'\t') [ "$FOCO" == "PASTAS" ] && FOCO="ARQUIVOS" || FOCO="PASTAS" ;;
 
-        "") # ABRIR / ENTRAR
+        "")
             if [ "$FOCO" == "PASTAS" ]; then
                 ITEM=$(echo "${PASTAS[$CURSOR_P]}" | tr -d '*/')
                 [ "$ITEM" == ".." ] && cd .. || cd "$ITEM"
