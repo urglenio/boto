@@ -78,7 +78,7 @@ while true; do
     AVISO_UPDATE=""
     if [ -f /tmp/boto_update_ready ]; then
         UPDATE_STYLE="\033[1;5;32m"
-        AVISO_UPDATE=" [UPDATE DISPONÍVEL!]"
+        AVISO_UPDATE=" [UPDATE DISPONÍVEL!] execute boto-update"
     fi
 
     LARGURA_TOTAL=$((COL_LARGURA * 2 + 5))
