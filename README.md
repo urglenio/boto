@@ -10,7 +10,7 @@ O **Boto** é um gerenciador de arquivos leve para terminal (Bash), inspirado no
 
 ## 🛠️ Instalação
 ```bash
-git clone [https://github.com/urglenio/boto.git](https://github.com/urglenio/boto.git)
+git clone https://github.com/urglenio/boto.git
 cd boto
 chmod +x install.sh
-./install.sh
+sudo ./install.sh
