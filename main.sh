@@ -1,6 +1,14 @@
 #!/bin/bash
 
 APP_PATH=$(dirname "$(readlink -f "$0")")
+
+# --- EXIBIR LOGO DE ENTRADA ---
+if [ -f "$APP_PATH/logo.sh" ]; then
+    bash "$APP_PATH/logo.sh"
+    sleep 2  # Espera 2 segundos para o usuário ver o desenho
+fi
+
+APP_PATH=$(dirname "$(readlink -f "$0")")
 [ -f "$APP_PATH/config.sh" ] && source "$APP_PATH/config.sh" || {
     BG_BLUE='\033[44m'; FG_WHITE='\033[37;1m'; FG_YELLOW='\033[33;1m'; FG_GREEN='\033[32;1m'
     RESET='\033[0m'; HIGHLIGHT='\033[47;30m'; INFOBG='\033[40;37m'; FG_CYAN='\033[36;1m'

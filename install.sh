@@ -12,6 +12,8 @@ sudo rm -rf "$INSTALL_DIR"
 sudo git clone "$REPO_URL" "$INSTALL_DIR"
 sudo chmod +x "$INSTALL_DIR/main.sh"
 sudo chmod +x "$INSTALL_DIR/menu.sh"
+sudo chmod +x "$INSTALL_DIR/logo.sh"
+sudo chmod +x "$INSTALL_DIR/config.sh"
 
 # 2. Criação dos links simbólicos
 sudo ln -sf "$INSTALL_DIR/main.sh" "$BIN_DIR/boto-fm"
