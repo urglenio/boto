@@ -1,28 +1,25 @@
 #!/bin/bash
 
-# --- 1. GUARDA O CAMINHO ONDE O GERENCIADOR ESTÁ INSTALADO ---
-# Isso garante que o menu.sh e o config.sh sejam achados em qualquer lugar
 APP_PATH=$(dirname "$(readlink -f "$0")")
-
-# --- 2. IMPORTAÇÃO USANDO CAMINHO FIXO ---
-if [ -f "$APP_PATH/config.sh" ]; then
-    source "$APP_PATH/config.sh"
-else
+[ -f "$APP_PATH/config.sh" ] && source "$APP_PATH/config.sh" || {
     BG_BLUE='\033[44m'; FG_WHITE='\033[37;1m'; FG_YELLOW='\033[33;1m'; FG_GREEN='\033[32;1m'
     RESET='\033[0m'; HIGHLIGHT='\033[47;30m'; INFOBG='\033[40;37m'; FG_CYAN='\033[36;1m'
     TL="+"; TR="+"; BL="+"; BR="+"; HL="-"; VL="|"; DIV="+"; B_DIV="+"
-fi
+}
 
 CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
 FOCO="PASTAS"; COL_LARGURA=30; MAX_VIEW=15
+FILTRO="" # Variável para armazenar o termo de busca
 
 TERM_STATE=$(stty -g)
 cleanup() { stty "$TERM_STATE"; clear; exit; }
 trap cleanup SIGINT SIGTERM
 
 while true; do
-    # 3. COLETA DE DADOS
-    LISTA_BRUTA=$(ls -1F --group-directories-first 2>/dev/null)
+    # 1. COLETA DE DADOS FILTRADA
+    # Se FILTRO não estiver vazio, o grep filtra os resultados
+    LISTA_BRUTA=$(ls -1F --group-directories-first 2>/dev/null | grep -i "$FILTRO")
+
     PASTAS=("..")
     mapfile -t -O 1 PASTAS < <(echo "$LISTA_BRUTA" | grep '/$')
     mapfile -t ARQUIVOS < <(echo "$LISTA_BRUTA" | grep -v '/$')
@@ -35,56 +32,50 @@ while true; do
     clear
     # --- INTERFACE ---
     printf "${BG_BLUE}${FG_WHITE}%s%s%s${RESET}\n" "$TL" "$(printf '%*s' $((COL_LARGURA*2+5)) | tr ' ' "$HL")" "$TR"
-    TIT_P=" DIRETORIOS "; [ "$FOCO" == "PASTAS" ] && TIT_P="> DIRETORIOS <"
-    TIT_A=" ARQUIVOS ";   [ "$FOCO" == "ARQUIVOS" ] && TIT_A="> ARQUIVOS <"
-    printf "${BG_BLUE}${FG_WHITE}${VL} %-$(($COL_LARGURA+1))s ${VL} %-$(($COL_LARGURA+1))s ${VL}${RESET}\n" "$TIT_P" "$TIT_A"
+    printf "${BG_BLUE}${FG_WHITE}${VL} %-$(($COL_LARGURA+1))s ${VL} %-$(($COL_LARGURA+1))s ${VL}${RESET}\n" \
+        "$([ "$FOCO" == "PASTAS" ] && echo "> DIRETORIOS <" || echo "  DIRETORIOS  ")" \
+        "$([ "$FOCO" == "ARQUIVOS" ] && echo "> ARQUIVOS <" || echo "  ARQUIVOS  ")"
     printf "${BG_BLUE}${FG_WHITE}${VL}%s%s%s${VL}${RESET}\n" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")"
 
     for ((i=0; i<MAX_VIEW; i++)); do
         echo -ne "${BG_BLUE}${FG_WHITE}${VL} "
-        # Coluna Pastas
+        # Coluna Pastas... (Lógica de exibição idêntica à sua estável)
         IDX_P=$((i + OFFSET_P))
         if [ $IDX_P -lt $total_p ]; then
             N_P="${PASTAS[$IDX_P]:0:$COL_LARGURA}"
-            SP_P=$((COL_LARGURA - ${#N_P}))
-            if [ "$FOCO" == "PASTAS" ] && [ $IDX_P -eq $CURSOR_P ]; then
-                echo -ne "${HIGHLIGHT}${N_P}$(printf '%*s' $SP_P "")${RESET}${BG_BLUE}${FG_WHITE}"
-            else
-                echo -ne "${FG_YELLOW}${N_P}${FG_WHITE}$(printf '%*s' $SP_P "")"
-            fi
-            pos_p=$(( (CURSOR_P * (MAX_VIEW-1)) / (total_p > 1 ? total_p-1 : 1) ))
-            [ $i -eq $pos_p ] && echo -ne "█" || echo -ne "░"
+            [ "$FOCO" == "PASTAS" ] && [ $IDX_P -eq $CURSOR_P ] && \
+                echo -ne "${HIGHLIGHT}${N_P}$(printf '%*s' $((COL_LARGURA - ${#N_P})) "")${RESET}${BG_BLUE}${FG_WHITE}" || \
+                echo -ne "${FG_YELLOW}${N_P}${FG_WHITE}$(printf '%*s' $((COL_LARGURA - ${#N_P})) "")"
+            echo -ne "$([ $i -eq $(( (CURSOR_P * (MAX_VIEW-1)) / (total_p > 1 ? total_p-1 : 1) )) ] && echo "█" || echo "░")"
         else printf "%-$(($COL_LARGURA+1))s" ""; fi
+
         echo -ne " ${VL} "
-        # Coluna Arquivos
+
+        # Coluna Arquivos... (Lógica de exibição idêntica à sua estável)
         IDX_A=$((i + OFFSET_A))
         if [ $IDX_A -lt $total_a ]; then
             N_A="${ARQUIVOS[$IDX_A]:0:$COL_LARGURA}"
-            SP_A=$((COL_LARGURA - ${#N_A}))
-            if [ "$FOCO" == "ARQUIVOS" ] && [ $IDX_A -eq $CURSOR_A ]; then
-                echo -ne "${HIGHLIGHT}${N_A}$(printf '%*s' $SP_A "")${RESET}${BG_BLUE}${FG_WHITE}"
-            else
-                echo -ne "${FG_GREEN}${N_A}${FG_WHITE}$(printf '%*s' $SP_A "")"
-            fi
-            pos_a=$(( (CURSOR_A * (MAX_VIEW-1)) / (total_a > 1 ? total_a-1 : 1) ))
-            [ $i -eq $pos_a ] && echo -ne "█" || echo -ne "░"
+            [ "$FOCO" == "ARQUIVOS" ] && [ $IDX_A -eq $CURSOR_A ] && \
+                echo -ne "${HIGHLIGHT}${N_A}$(printf '%*s' $((COL_LARGURA - ${#N_A})) "")${RESET}${BG_BLUE}${FG_WHITE}" || \
+                echo -ne "${FG_GREEN}${N_A}${FG_WHITE}$(printf '%*s' $((COL_LARGURA - ${#N_A})) "")"
+            echo -ne "$([ $i -eq $(( (CURSOR_A * (MAX_VIEW-1)) / (total_a > 1 ? total_a-1 : 1) )) ] && echo "█" || echo "░")"
         else printf "%-$(($COL_LARGURA+1))s" ""; fi
         echo -e " ${VL}${RESET}"
     done
     printf "${BG_BLUE}${FG_WHITE}%s%s%s%s%s${RESET}\n" "$BL" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$B_DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$BR"
 
-    # --- INFO BAR (PERMISSÕES E DATA) ---
-    if [ "$FOCO" == "PASTAS" ]; then ALVO="${PASTAS[$CURSOR_P]}"; else ALVO="${ARQUIVOS[$CURSOR_A]}"; fi
-    ALVO_LIMPO=$(echo "$ALVO" | tr -d '*/')
-    if [ -n "$ALVO" ] && [ -e "$ALVO_LIMPO" ]; then
-        PERM=$(stat -c '%A' "$ALVO_LIMPO")
-        DONO=$(stat -c '%U' "$ALVO_LIMPO")
-        DATA=$(stat -c '%y' "$ALVO_LIMPO" | cut -d. -f1 | cut -c1-16)
-        [ -d "$ALVO_LIMPO" ] && TAM="DIR" || TAM=$(ls -lh "$ALVO_LIMPO" | awk '{print $5}')
-        echo -e "${INFOBG} PERM: $PERM | DONO: $DONO | TAM: $TAM ${RESET}"
-        echo -e "${INFOBG} DATA: $DATA | ROTA: $(realpath "$ALVO_LIMPO" | rev | cut -c1-45 | rev) ${RESET}"
+    # --- BARRA DE STATUS E BUSCA ---
+    if [ -n "$FILTRO" ]; then
+        echo -e "${HIGHLIGHT} BUSCANDO: $FILTRO (Pressione ESC para limpar) ${RESET}"
+    else
+        [ "$FOCO" == "PASTAS" ] && ALVO="${PASTAS[$CURSOR_P]}" || ALVO="${ARQUIVOS[$CURSOR_A]}"
+        ALVO_LIMPO=$(echo "$ALVO" | tr -d '*/')
+        if [ -n "$ALVO" ] && [ -e "$ALVO_LIMPO" ]; then
+            PERM=$(stat -c '%A' "$ALVO_LIMPO"); TAM=$([ -d "$ALVO_LIMPO" ] && echo "DIR" || ls -lh "$ALVO_LIMPO" | awk '{print $5}')
+            echo -e "${INFOBG} PERM: $PERM | TAM: $TAM | DATA: $(stat -c '%y' "$ALVO_LIMPO" | cut -c1-16) ${RESET}"
+        fi
     fi
-    echo -e "${FG_CYAN} [TAB] Lado | [ENTER] Ação | [Q] Sair ${RESET}"
+    echo -e "${FG_CYAN} [/] Buscar | [ENTER] Ação | [Q] Sair ${RESET}"
 
     # --- CAPTURA DE TECLA ---
     stty -icanon -echo
@@ -92,32 +83,28 @@ while true; do
     stty "$TERM_STATE"
 
     case "$tecla" in
-        $'\t' | $'\x09') [ "$FOCO" == "PASTAS" ] && FOCO="ARQUIVOS" || FOCO="PASTAS" ;;
-        $'\x1b')
-            read -rsn2 -t 0.01 resto
-            case "$resto" in
-                "[A") if [ "$FOCO" == "PASTAS" ]; then
-                        ((CURSOR_P--)); [ $CURSOR_P -lt $OFFSET_P ] && [ $OFFSET_P -gt 0 ] && ((OFFSET_P--))
-                      else
-                        ((CURSOR_A--)); [ $CURSOR_A -lt $OFFSET_A ] && [ $OFFSET_A -gt 0 ] && ((OFFSET_A--))
-                      fi ;;
-                "[B") if [ "$FOCO" == "PASTAS" ]; then
-                        ((CURSOR_P++)); [ $CURSOR_P -ge $((OFFSET_P + MAX_VIEW)) ] && ((OFFSET_P++))
-                      else
-                        ((CURSOR_A++)); [ $CURSOR_A -ge $((OFFSET_A + MAX_VIEW)) ] && ((OFFSET_A++))
-                      fi ;;
-            esac ;;
-        "" | $'\x0a' | $'\x0d')
+        "/") # Ativa o modo de busca
+            echo -ne "\033[s" # Salva posição do cursor
+            echo -ne "\033[1;1H\033[2K Buscar: " # Vai para o topo e limpa linha
+            stty echo icanon
+            read FILTRO
+            stty -echo -icanon
+            CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
+            ;;
+        $'\x1b') # ESC para limpar o filtro
+            FILTRO=""
+            read -rsn2 -t 0.01 resto # Captura setas
+            [ "$resto" == "[A" ] && { [ "$FOCO" == "PASTAS" ] && ((CURSOR_P--)) || ((CURSOR_A--)); }
+            [ "$resto" == "[B" ] && { [ "$FOCO" == "PASTAS" ] && ((CURSOR_P++)) || ((CURSOR_A++)); }
+            ;;
+        $'\t') [ "$FOCO" == "PASTAS" ] && FOCO="ARQUIVOS" || FOCO="PASTAS" ;;
+        "")
             if [ "$FOCO" == "PASTAS" ]; then
-                ITEM_P="${PASTAS[$CURSOR_P]}"
-                if [ "$ITEM_P" == ".." ]; then cd ..; else cd "$(echo "$ITEM_P" | tr -d '*/')"; fi
-                CURSOR_P=0; OFFSET_P=0; CURSOR_A=0; OFFSET_A=0
+                ITEM=$(echo "${PASTAS[$CURSOR_P]}" | tr -d '*/')
+                [ "$ITEM" == ".." ] && cd .. || cd "$ITEM"
+                FILTRO=""; CURSOR_P=0; CURSOR_A=0
             else
-                if [ $total_a -gt 0 ]; then
-                    ARQ_FINAL=$(echo "${ARQUIVOS[$CURSOR_A]}" | tr -d '*/')
-                    # CHAMA O MENU USANDO O CAMINHO ABSOLUTO SALVO NO INÍCIO
-                    bash "$APP_PATH/menu.sh" "$ARQ_FINAL"
-                fi
+                bash "$APP_PATH/menu.sh" "$(echo "${ARQUIVOS[$CURSOR_A]}" | tr -d '*/')"
             fi ;;
         q|Q) cleanup ;;
     esac
