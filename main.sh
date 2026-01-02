@@ -1,5 +1,17 @@
 #!/bin/bash
 
+# --- FUNÇÃO DE SAÍDA (SALVA DIRETÓRIO) ---
+TERM_STATE=$(stty -g)
+cleanup() {
+    stty "$TERM_STATE"
+    # Salva o diretório e garante que o usuário comum possa ler/apagar
+    pwd > /tmp/boto_last_dir
+    chmod 777 /tmp/boto_last_dir 2>/dev/null
+    clear
+    exit
+}
+trap cleanup SIGINT SIGTERM
+
 # --- CONFIGURAÇÃO DE CAMINHO ---
 APP_PATH=$(dirname "$(readlink -f "$0")")
 
@@ -25,10 +37,6 @@ fi
 CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
 FOCO="PASTAS"; COL_LARGURA=30; MAX_VIEW=15
 FILTRO=""
-
-TERM_STATE=$(stty -g)
-cleanup() { stty "$TERM_STATE"; clear; exit; }
-trap cleanup SIGINT SIGTERM
 
 while true; do
     NOME_PASTA_ATUAL=$(basename "$(pwd)")
@@ -117,7 +125,7 @@ while true; do
                 mover_cursor 6 15; echo -e "${MENU_BG}┌──────────────────────────────┐${RESET}"
                 mover_cursor 7 15; echo -e "${MENU_BG}│ ONDE PESQUISAR?              │${RESET}"
                 mover_cursor 8 15; echo -e "${MENU_BG}├──────────────────────────────┤${RESET}"
-                mover_cursor 9 15; echo -e "${MENU_BG}│ [1] Pasta Atual (Rápido)     │${RESET}"
+                mover_cursor 9 15; echo -e "${MENU_BG}│ [ENTER] Pasta Atual (Rápido) │${RESET}"
                 mover_cursor 10 15; echo -e "${MENU_BG}│ [2] Todo o Sistema (Global)  │${RESET}"
                 mover_cursor 11 15; echo -e "${MENU_BG}└──────────────────────────────┘${RESET}"
                 read -rsn1 escopo
