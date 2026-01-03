@@ -31,19 +31,20 @@ trap cleanup SIGINT SIGTERM
 # --- 2. VERIFICAÇÃO DE UPDATE EM BACKGROUND ---
 rm -f /tmp/boto_update_ready
 (
-    # URL RAW (Certifique-se que este link abre o código puro no navegador)
-    REPO_VERSION_URL="https://raw.githubusercontent.com/urglenio/boto/main/version.sh"
+    # Geramos um número aleatório para "enganar" o cache do GitHub
+    CACHE_BUSTER=$(date +%s)
+    REPO_VERSION_URL="https://raw.githubusercontent.com/urglenio/boto/main/version.sh?nocache=$CACHE_BUSTER"
     TMP_VERSION="/tmp/boto_remote_version.sh"
 
-    # Baixa o arquivo. O -L segue redirecionamentos do GitHub
+    # O parâmetro -L é essencial para seguir redirecionamentos
     curl -s -L -m 5 "$REPO_VERSION_URL" -o "$TMP_VERSION"
 
     if [ -f "$TMP_VERSION" ]; then
-        # Extrai apenas os números (limpeza total de aspas e espaços)
+        # Extrai o build remoto e local limpando tudo que não for número
         REMOTE_BUILD=$(grep "BOTO_BUILD=" "$TMP_VERSION" | cut -d'"' -f2 | tr -dc '0-9')
         LOCAL_BUILD=$(echo "$BOTO_BUILD" | tr -dc '0-9')
 
-        # Só cria o sinalizador se o remoto for REALMENTE maior
+        # DEBUG SILENCIOSO: Se quiser ver o que ele baixou, olhe o arquivo /tmp/boto_remote_version.sh
         if [ -n "$REMOTE_BUILD" ] && [ "$REMOTE_BUILD" -gt "$LOCAL_BUILD" ] 2>/dev/null; then
             touch /tmp/boto_update_ready
         fi
