@@ -1,7 +1,7 @@
 #!/bin/bash
 # --- INFORMAÇÕES DO SISTEMA ---
-BOTO_VERSION="0.1.6-beta"
-BOTO_BUILD="106"
+BOTO_VERSION="0.1.8-beta"
+BOTO_BUILD="108"
 BOTO_AUTHOR="Hugly"
 
 # Adiciona os colaboradores aqui dentro dos parênteses, separados por espaço ou linha
