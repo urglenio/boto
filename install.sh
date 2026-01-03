@@ -21,7 +21,7 @@ sudo chmod +x "$INSTALL_DIR/main.sh"
 sudo chmod +x "$INSTALL_DIR/menu.sh"
 sudo chmod +x "$INSTALL_DIR/logo.sh"
 sudo chmod +x "$INSTALL_DIR/config_manager.sh"
-sudo chmod +x "$INSTALL_DIR/version.sh"
+sudo chmod +x "$INSTALL_DIR/fav_manager.sh"
 sudo chmod 666 "$INSTALL_DIR/config.sh"
 
 # 4. Cria o motor interno (binário real)

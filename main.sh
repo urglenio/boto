@@ -1,4 +1,15 @@
 #!/bin/bash
+export LANG=pt_BR.UTF-8
+export LC_ALL=pt_BR.UTF-8
+
+# Função para repetir caracteres (resolve o problema do tr com UTF-8)
+repetir() {
+    local char="$1"
+    local count="$2"
+    local str=""
+    for ((i=0; i<count; i++)); do str+="$char"; done
+    echo -n "$str"
+}
 
 # --- CONFIGURAÇÃO DE CAMINHO ---
 APP_PATH=$(dirname "$(readlink -f "$0")")
@@ -18,7 +29,6 @@ trap cleanup SIGINT SIGTERM
 [ -f "$APP_PATH/version.sh" ] && source "$APP_PATH/version.sh"
 
 # --- 2. VERIFICAÇÃO DE UPDATE EM BACKGROUND ---
-# Limpa sinalizador antigo antes de começar
 rm -f /tmp/boto_update_ready
 (
     REPO_VERSION_URL="https://raw.githubusercontent.com/urglenio/boto/main/version.sh"
@@ -26,12 +36,17 @@ rm -f /tmp/boto_update_ready
     curl -s -m 5 "$REPO_VERSION_URL" -o "$TMP_VERSION"
     if [ -f "$TMP_VERSION" ]; then
         REMOTE_BUILD=$(grep "BOTO_BUILD=" "$TMP_VERSION" | cut -d'"' -f2 | tr -d '[:space:]')
-        # Se o build remoto for maior que o local (que veio do version.sh acima)
         if [ "$REMOTE_BUILD" -gt "$BOTO_BUILD" ] 2>/dev/null; then
             touch /tmp/boto_update_ready
         fi
     fi
 ) &
+
+# Pasta para dados que devem sobreviver a updates
+DATA_DIR="$HOME/.config/boto"
+mkdir -p "$DATA_DIR"
+FAV_FILE="$DATA_DIR/favoritos.txt"
+[ ! -f "$FAV_FILE" ] && touch "$FAV_FILE"
 
 # --- 3. CARREGAR CORES E CONFIGURAÇÕES ---
 BG_BLUE='\033[44m'; FG_WHITE='\033[37;1m'; FG_YELLOW='\033[33;1m'; FG_GREEN='\033[32;1m'
@@ -87,54 +102,83 @@ while true; do
     # --- 2. BARRA DE NAVEGAÇÃO ---
     CAMINHO_ATUAL=$(pwd)
     IFACE_PATH="${CAMINHO_ATUAL}"
-    [ ${#IFACE_PATH} -gt $((LARGURA_TOTAL-2)) ] && IFACE_PATH="...${IFACE_PATH: -$((LARGURA_TOTAL-6))}"
-    printf "${HIGHLIGHT} 📂 %-$(($LARGURA_TOTAL-2))s ${RESET}\n" "$IFACE_PATH"
+    [ ${#IFACE_PATH} -gt $((LARGURA_TOTAL-3)) ] && IFACE_PATH="...${IFACE_PATH: -$((LARGURA_TOTAL-7))}"
+    printf "${HIGHLIGHT} 📂 %-$(($LARGURA_TOTAL-3))s ${RESET}\n" "$IFACE_PATH"
 
-    # --- 3. DESENHO DA JANELA ---
-    printf "${BG_BLUE}${FG_WHITE}%s%s%s${RESET}\n" "$TL" "$(printf '%*s' "$LARGURA_TOTAL" | tr ' ' "$HL")" "$TR"
+# --- 3. DESENHO DA JANELA ---
+    printf "${BG_BLUE}${FG_WHITE}%s%s%s${RESET}\n" "$TL" "$(repetir "$HL" "$LARGURA_TOTAL")" "$TR"
 
+    # Preparação dos Títulos
     TIT_P=" DIRETORIOS "; [ "$FOCO" == "PASTAS" ] && TIT_P="> DIRETORIOS <"
-    FOLDER_LABEL="${NOME_PASTA_ATUAL:0:$((COL_LARGURA-2))}"
+
+    # Título da Direita (Nome da Pasta Atual)
+    FOLDER_LABEL="${NOME_PASTA_ATUAL:0:$((COL_LARGURA-4))}" # Corta se o nome for gigante
     TIT_A=" $FOLDER_LABEL "; [ "$FOCO" == "ARQUIVOS" ] && TIT_A="> $FOLDER_LABEL <"
 
-    printf "${BG_BLUE}${FG_WHITE}${VL} %-$(($COL_LARGURA+1))s ${VL} %-$(($COL_LARGURA+1))s ${VL}${RESET}\n" "$TIT_P" "$TIT_A"
-    printf "${BG_BLUE}${FG_WHITE}${VL}%s%s%s${VL}${RESET}\n" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")"
+    # Cálculo de espaços para alinhar com a VL (Vertical Line)
+    # A largura interna de cada coluna é $COL_LARGURA + 1 (por causa do espaço da barra de rolagem)
+    # Somamos +1 para manter o respiro interno original
+    LARG_INTERNA=$((COL_LARGURA + 1))
 
-    # --- 4. LISTAGEM ---
+    SP_TIT_P=$(( LARG_INTERNA - ${#TIT_P} ))
+    SP_TIT_A=$(( LARG_INTERNA - ${#TIT_A} ))
+
+    # Impressão dos Cabeçalhos com alinhamento fixo
+    echo -ne "${BG_BLUE}${FG_WHITE}${VL} ${TIT_P}$(printf '%*s' $SP_TIT_P "")${VL} "
+    echo -e "${TIT_A}$(printf '%*s' $SP_TIT_A "")${VL}${RESET}"
+
+    # Divisória do meio
+    printf "${BG_BLUE}${FG_WHITE}${VL}%s%s%s${VL}${RESET}\n" "$(repetir "$HL" $((COL_LARGURA+2)))" "$DIV" "$(repetir "$HL" $((COL_LARGURA+2)))"
+
+ # --- 4. LISTAGEM ---
     for ((i=0; i<MAX_VIEW; i++)); do
         echo -ne "${BG_BLUE}${FG_WHITE}${VL} "
+
+        # Coluna Pastas
         IDX_P=$((i + OFFSET_P))
         if [ $IDX_P -lt $total_p ]; then
-            N_P="${PASTAS[$IDX_P]:0:$COL_LARGURA}"
-            SP_P=$((COL_LARGURA - ${#N_P}))
+            N_P="${PASTAS[$IDX_P]:0:$((COL_LARGURA-1))}" # Pega 1 caractere a menos para sobrar espaço para a barra
+            SP_P=$(( (COL_LARGURA - 1) - ${#N_P} ))      # Ajusta o espaço de preenchimento
+
             if [ "$FOCO" == "PASTAS" ] && [ $IDX_P -eq $CURSOR_P ]; then
                 echo -ne "${HIGHLIGHT}${N_P}$(printf '%*s' $SP_P "")${RESET}${BG_BLUE}${FG_WHITE}"
             else
                 echo -ne "${FG_YELLOW}${N_P}${FG_WHITE}$(printf '%*s' $SP_P "")"
             fi
+
+            # A barra de rolagem agora ocupa o último espaço fixo da coluna
             pos_p=$(( (CURSOR_P * (MAX_VIEW-1)) / (total_p > 1 ? total_p-1 : 1) ))
             [ $i -eq $pos_p ] && echo -ne "█" || echo -ne "░"
-        else printf "%-$(($COL_LARGURA+1))s" ""; fi
+        else
+            printf "%-${COL_LARGURA}s" ""
+        fi
 
         echo -ne " ${VL} "
 
+        # Coluna Arquivos
         IDX_A=$((i + OFFSET_A))
         if [ $IDX_A -lt $total_a ]; then
-            N_A="${ARQUIVOS[$IDX_A]:0:$COL_LARGURA}"
-            SP_A=$((COL_LARGURA - ${#N_A}))
+            N_A="${ARQUIVOS[$IDX_A]:0:$((COL_LARGURA-1))}" # Pega 1 caractere a menos
+            SP_A=$(( (COL_LARGURA - 1) - ${#N_A} ))      # Ajusta o espaço
+
             if [ "$FOCO" == "ARQUIVOS" ] && [ $IDX_A -eq $CURSOR_A ]; then
                 echo -ne "${HIGHLIGHT}${N_A}$(printf '%*s' $SP_A "")${RESET}${BG_BLUE}${FG_WHITE}"
             else
                 echo -ne "${FG_GREEN}${N_A}${FG_WHITE}$(printf '%*s' $SP_A "")"
             fi
+
+            # Barra de rolagem
             pos_a=$(( (CURSOR_A * (MAX_VIEW-1)) / (total_a > 1 ? total_a-1 : 1) ))
             [ $i -eq $pos_a ] && echo -ne "█" || echo -ne "░"
-        else printf "%-$(($COL_LARGURA+1))s" ""; fi
+        else
+            printf "%-${COL_LARGURA}s" ""
+        fi
         echo -e " ${VL}${RESET}"
     done
 
     # --- 5. BORDA INFERIOR ---
-    printf "${BG_BLUE}${FG_WHITE}%s%s%s%s%s${RESET}\n" "$BL" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$B_DIV" "$(printf '%*s' $((COL_LARGURA+2)) | tr ' ' "$HL")" "$BR"
+    # Correção: Borda inferior usando 'repetir'
+    printf "${BG_BLUE}${FG_WHITE}%s%s%s%s%s${RESET}\n" "$BL" "$(repetir "$HL" $((COL_LARGURA+2)))" "$B_DIV" "$(repetir "$HL" $((COL_LARGURA+2)))" "$BR"
 
     # --- 6. BARRA DE STATUS ---
     if [ -n "$FILTRO" ]; then
@@ -148,7 +192,7 @@ while true; do
             echo -e "${INFOBG} PERM: $PERM | TAM: $TAM | DATA: $(stat -c '%y' "$ALVO_LIMPO" | cut -c1-16) ${RESET}"
         fi
     fi
-    echo -e "${FG_CYAN} [/] Buscar [N] Pasta [M] Menu [C] Config [TAB] Lado [K] Ir para [Q] Sair ${RESET}"
+    echo -e "${FG_CYAN} [/] Buscar [N] Pasta [M] Menu [C] Config [TAB] Lado [K] Ir para [V] Favoritos [Q] Sair ${RESET}"
 
     # --- 7. CAPTURA DE TECLAS ---
     stty -icanon -echo
@@ -189,6 +233,53 @@ while true; do
         "m"|"M")
             [ "$FOCO" == "PASTAS" ] && ALVO_M=$(echo "${PASTAS[$CURSOR_P]}" | tr -d '*/') || ALVO_M=$(echo "${ARQUIVOS[$CURSOR_A]}" | tr -d '*/')
             [ -n "$ALVO_M" ] && [ "$ALVO_M" != ".." ] && bash "$APP_PATH/menu.sh" "$ALVO_M" ;;
+
+"f"|"F") # ADICIONAR AOS FAVORITOS COM POPUP
+            [ "$FOCO" == "PASTAS" ] && FAV_ALVO="${PASTAS[$CURSOR_P]}" || FAV_ALVO="${ARQUIVOS[$CURSOR_A]}"
+            FAV_ALVO_LIMPO=$(readlink -f "$(echo "$FAV_ALVO" | tr -d '*/')")
+
+            if [ -n "$FAV_ALVO_LIMPO" ] && [ "$FAV_ALVO" != ".." ]; then
+                MSG="⭐ Adicionado aos Favoritos!"
+                COR_MSG="${FG_GREEN}"
+
+                if grep -qx "$FAV_ALVO_LIMPO" "$FAV_FILE"; then
+                    MSG="⭐ Já está nos Favoritos!   "
+                    COR_MSG="${FG_YELLOW}"
+                else
+                    echo "$FAV_ALVO_LIMPO" >> "$FAV_FILE"
+                fi
+
+                # --- DESENHO DO POPUP DE CONFIRMAÇÃO ---
+                LARG_POP=$(( ${#MSG} + 5 ))
+                COL_POP=$(( (LARGURA_TOTAL / 2) - (LARG_POP / 2) + 3 ))
+                LIN_POP=10
+
+                # Borda superior do balão
+                mover_cursor $LIN_POP $COL_POP
+                echo -e "${MENU_BG}┏$(repetir "━" $LARG_POP)┓${RESET}"
+
+                # Conteúdo do balão
+                mover_cursor $((LIN_POP+1)) $COL_POP
+                echo -e "${MENU_BG}┃  ${COR_MSG}${MSG}${RESET}${MENU_BG}  ┃${RESET}"
+
+                # Borda inferior do balão
+                mover_cursor $((LIN_POP+2)) $COL_POP
+                echo -e "${MENU_BG}┗$(repetir "━" $LARG_POP)┛${RESET}"
+
+                sleep 1.2 # Tempo para o usuário ver a mensagem
+            fi ;;
+
+        "v"|"V") # CHAMA O GERENCIADOR DE FAVORITOS
+            rm -f /tmp/boto_fav_result
+            bash "$APP_PATH/fav_manager.sh"
+            if [ -f /tmp/boto_fav_result ]; then
+                RES_FAV=$(cat /tmp/boto_fav_result)
+                if [ "$RES_FAV" != "REFRESH" ]; then
+                    [ -d "$RES_FAV" ] && cd "$RES_FAV" || cd "$(dirname "$RES_FAV")"
+                    CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
+                fi
+                rm -f /tmp/boto_fav_result
+            fi ;;
 
         "k"|"K")
             mover_cursor 2 1

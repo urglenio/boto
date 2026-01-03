@@ -8,5 +8,15 @@ INFOBG='\033[40;37m'
 FG_CYAN='\033[36;1m'
 MENU_BG='\033[44;37m'
 MAX_VIEW=15
-COL_LARGURA=25
+COL_LARGURA=50
 EDITOR_PADRAO='nano'
+
+
+TL="┏"
+TR="┓"
+BL="┗"
+BR="┛"
+HL="━"
+VL="┃"
+DIV="+"
+B_DIV="+"

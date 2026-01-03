@@ -16,7 +16,7 @@ mover_cursor $((LINHA+2)) $COLUNA; echo -e "${MENU_BG}├───────�
 
 if [ -f "$ALVO" ]; then
     mover_cursor $((LINHA+3)) $COLUNA; echo -e "${MENU_BG}│ [1] Abrir / Executar           │${RESET}"
-    mover_cursor $((LINHA+4)) $COLUNA; echo -e "${MENU_BG}│ [2] Editar com NANO            │${RESET}"
+    mover_cursor $((LINHA+4)) $COLUNA; echo -e "${MENU_BG}│ [2] Editar                     │${RESET}"
 else
     mover_cursor $((LINHA+3)) $COLUNA; echo -e "${MENU_BG}│ [ ] ------------------         │${RESET}"
     mover_cursor $((LINHA+4)) $COLUNA; echo -e "${MENU_BG}│ [ ] ------------------         │${RESET}"
@@ -36,7 +36,10 @@ read -rsn1 opcao
 
 case $opcao in
     1) if [ -d "$ALVO" ]; then exit 0; else xdg-open "$ALVO" >/dev/null 2>&1 & clear; fi ;;
-    2) if [ -f "$ALVO" ]; then clear; nano "$ALVO"; fi ;;
+    2) if [ -f "$ALVO" ]; then
+       clear
+       ${EDITOR_PADRAO:-nano} "$ALVO"
+   fi ;;
     3) mover_cursor $((LINHA+13)) $COLUNA; echo -ne "${FG_CYAN} Novo nome: ${RESET}"
        stty echo; read -e -i "$ALVO" novo; stty -echo
        [ -n "$novo" ] && mv "$ALVO" "$novo" ;;
