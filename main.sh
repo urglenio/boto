@@ -31,12 +31,20 @@ trap cleanup SIGINT SIGTERM
 # --- 2. VERIFICAÇÃO DE UPDATE EM BACKGROUND ---
 rm -f /tmp/boto_update_ready
 (
+    # URL RAW (Certifique-se que este link abre o código puro no navegador)
     REPO_VERSION_URL="https://raw.githubusercontent.com/urglenio/boto/main/version.sh"
     TMP_VERSION="/tmp/boto_remote_version.sh"
-    curl -s -m 5 "$REPO_VERSION_URL" -o "$TMP_VERSION"
+
+    # Baixa o arquivo. O -L segue redirecionamentos do GitHub
+    curl -s -L -m 5 "$REPO_VERSION_URL" -o "$TMP_VERSION"
+
     if [ -f "$TMP_VERSION" ]; then
-        REMOTE_BUILD=$(grep "BOTO_BUILD=" "$TMP_VERSION" | cut -d'"' -f2 | tr -d '[:space:]')
-        if [ "$REMOTE_BUILD" -gt "$BOTO_BUILD" ] 2>/dev/null; then
+        # Extrai apenas os números (limpeza total de aspas e espaços)
+        REMOTE_BUILD=$(grep "BOTO_BUILD=" "$TMP_VERSION" | cut -d'"' -f2 | tr -dc '0-9')
+        LOCAL_BUILD=$(echo "$BOTO_BUILD" | tr -dc '0-9')
+
+        # Só cria o sinalizador se o remoto for REALMENTE maior
+        if [ -n "$REMOTE_BUILD" ] && [ "$REMOTE_BUILD" -gt "$LOCAL_BUILD" ] 2>/dev/null; then
             touch /tmp/boto_update_ready
         fi
     fi
@@ -99,11 +107,13 @@ while true; do
     LARGURA_TOTAL=$((COL_LARGURA * 2 + 5))
     printf "${BG_BLUE}${UPDATE_STYLE} 🐬 BOTO-FM v%-10s %s ${RESET}\n" "$BOTO_VERSION" "$AVISO_UPDATE"
 
-    # --- 2. BARRA DE NAVEGAÇÃO ---
+# --- 2. BARRA DE NAVEGAÇÃO ---
     CAMINHO_ATUAL=$(pwd)
     IFACE_PATH="${CAMINHO_ATUAL}"
-    [ ${#IFACE_PATH} -gt $((LARGURA_TOTAL-3)) ] && IFACE_PATH="...${IFACE_PATH: -$((LARGURA_TOTAL-7))}"
-    printf "${HIGHLIGHT} 📂 %-$(($LARGURA_TOTAL-3))s ${RESET}\n" "$IFACE_PATH"
+    # Ajuste para alinhar com a borda lateral
+    MAX_PATH_LEN=$((LARGURA_TOTAL - 4))
+    [ ${#IFACE_PATH} -gt $MAX_PATH_LEN ] && IFACE_PATH="...${IFACE_PATH: -$((MAX_PATH_LEN-3))}"
+    printf "${HIGHLIGHT} 📂 %-${MAX_PATH_LEN}s ${RESET}\n" "$IFACE_PATH"
 
 # --- 3. DESENHO DA JANELA ---
     printf "${BG_BLUE}${FG_WHITE}%s%s%s${RESET}\n" "$TL" "$(repetir "$HL" "$LARGURA_TOTAL")" "$TR"
