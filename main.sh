@@ -292,6 +292,64 @@ while true; do
                 rm -f /tmp/boto_fav_result
             fi ;;
 
+        p|P)
+        CB_PATH="/tmp/boto_clipboard_path"
+        CB_ACT="/tmp/boto_clipboard_action"
+
+        if [ -f "$CB_PATH" ]; then
+            CLIP_ORIGEM=$(cat "$CB_PATH")
+            CLIP_ACAO=$(cat "$CB_ACT")
+            CLIP_DESTINO=$(pwd)
+            NOME_ARQ=$(basename "$CLIP_ORIGEM")
+
+            if [ "$CLIP_ORIGEM" == "$CLIP_DESTINO/$NOME_ARQ" ]; then
+                # Popup de Erro Rápido
+                mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_RED}┌──────────────────────────────────┐${RESET}"
+                mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_RED}│ ERRO: ORIGEM IGUAL AO DESTINO!   │${RESET}"
+                mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_RED}└──────────────────────────────────┘${RESET}"
+                sleep 2
+            else
+                # Desenho do Popup de Progresso
+                P_LIN=8; P_COL=15; L_BOX=50
+                mover_cursor $P_LIN $P_COL;      echo -e "${INFOBG}┌────────────────────────────────────────────────┐${RESET}"
+                mover_cursor $((P_LIN+1)) $P_COL; echo -e "${INFOBG}│ PROCESSANDO: $(printf '%-33.33s' "$NOME_ARQ") │${RESET}"
+                mover_cursor $((P_LIN+2)) $P_COL; echo -e "${INFOBG}├────────────────────────────────────────────────┤${RESET}"
+                mover_cursor $((P_LIN+3)) $P_COL; echo -e "${INFOBG}│ Aguarde...                                     │${RESET}"
+                mover_cursor $((P_LIN+4)) $P_COL; echo -e "${INFOBG}└────────────────────────────────────────────────┘${RESET}"
+
+                if [ "$CLIP_ACAO" == "copy" ]; then
+                    # Executa rsync e joga a saída para um local temporário para não quebrar o layout
+                    # O segredo: mover o cursor para dentro do box ANTES do comando
+                    mover_cursor $((P_LIN+3)) $((P_COL+2))
+                    echo -ne "${FG_CYAN}"
+
+                    # Usamos stdbuf para garantir que o progresso apareça em tempo real
+                    rsync -ah --info=progress2 "$CLIP_ORIGEM" "$CLIP_DESTINO/" | tr '\r' '\n' | while read -r line; do
+                         # Só imprime se a linha tiver dados de progresso (evita pular linha)
+                         if [[ "$line" == *"%"* ]]; then
+                             mover_cursor $((P_LIN+3)) $((P_COL+2))
+                             echo -ne "Progresso: $(printf '%-40.40s' "$line")"
+                         fi
+                    done
+                    echo -ne "${RESET}"
+                else
+                    mv -v "$CLIP_ORIGEM" "$CLIP_DESTINO/"
+                    rm "$CB_PATH" "$CB_ACT"
+                fi
+
+                mover_cursor $((P_LIN+3)) $((P_COL+2))
+                echo -e "${FG_GREEN}✔ Concluído com sucesso!                         ${RESET}"
+                sleep 1.5
+            fi
+        else
+            # Popup de Aviso Vazio
+            mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_YELLOW}┌──────────────────────────────────┐${RESET}"
+            mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_YELLOW}│ AVISO: NADA PARA COLAR!          │${RESET}"
+            mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_YELLOW}└──────────────────────────────────┘${RESET}"
+            sleep 1.5
+        fi
+        ;;
+
          "d"|"D") # CHAMA O GERENCIADOR DE DISCOS
             rm -f /tmp/boto_fav_result
             bash "$APP_PATH/diskview.sh"
