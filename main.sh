@@ -76,7 +76,7 @@ mover_cursor() { printf "\033[%s;%sH" "$1" "$2"; }
 # --- EXIBIR LOGO ---
 if [ -f "$APP_PATH/logo.sh" ]; then
     bash "$APP_PATH/logo.sh"
-    sleep 2
+    sleep 1
 fi
 
 while true; do
@@ -112,7 +112,7 @@ while true; do
     CAMINHO_ATUAL=$(pwd)
     IFACE_PATH="${CAMINHO_ATUAL}"
     # Ajuste para alinhar com a borda lateral
-    MAX_PATH_LEN=$((LARGURA_TOTAL - 4))
+    MAX_PATH_LEN=$((LARGURA_TOTAL - 3))
     [ ${#IFACE_PATH} -gt $MAX_PATH_LEN ] && IFACE_PATH="...${IFACE_PATH: -$((MAX_PATH_LEN-3))}"
     printf "${HIGHLIGHT} 📂 %-${MAX_PATH_LEN}s ${RESET}\n" "$IFACE_PATH"
 
@@ -283,6 +283,18 @@ while true; do
         "v"|"V") # CHAMA O GERENCIADOR DE FAVORITOS
             rm -f /tmp/boto_fav_result
             bash "$APP_PATH/fav_manager.sh"
+            if [ -f /tmp/boto_fav_result ]; then
+                RES_FAV=$(cat /tmp/boto_fav_result)
+                if [ "$RES_FAV" != "REFRESH" ]; then
+                    [ -d "$RES_FAV" ] && cd "$RES_FAV" || cd "$(dirname "$RES_FAV")"
+                    CURSOR_P=0; CURSOR_A=0; OFFSET_P=0; OFFSET_A=0
+                fi
+                rm -f /tmp/boto_fav_result
+            fi ;;
+
+         "d"|"D") # CHAMA O GERENCIADOR DE DISCOS
+            rm -f /tmp/boto_fav_result
+            bash "$APP_PATH/diskview.sh"
             if [ -f /tmp/boto_fav_result ]; then
                 RES_FAV=$(cat /tmp/boto_fav_result)
                 if [ "$RES_FAV" != "REFRESH" ]; then
