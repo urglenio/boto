@@ -292,61 +292,75 @@ while true; do
                 rm -f /tmp/boto_fav_result
             fi ;;
 
-        p|P)
+p|P)
         CB_PATH="/tmp/boto_clipboard_path"
         CB_ACT="/tmp/boto_clipboard_action"
 
-        if [ -f "$CB_PATH" ]; then
+        # 1. Verificação: Clipboard Vazio
+        if [ ! -f "$CB_PATH" ]; then
+            mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_YELLOW}┌────────────────────────────────────────────────┐${RESET}"
+            mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_YELLOW}│ ⚠ AVISO: NADA PARA COLAR!                      │${RESET}"
+            mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_YELLOW}└────────────────────────────────────────────────┘${RESET}"
+            sleep 1.5
+        else
             CLIP_ORIGEM=$(cat "$CB_PATH")
             CLIP_ACAO=$(cat "$CB_ACT")
             CLIP_DESTINO=$(pwd)
             NOME_ARQ=$(basename "$CLIP_ORIGEM")
 
+            # 2. Verificação: Destino igual à Origem
             if [ "$CLIP_ORIGEM" == "$CLIP_DESTINO/$NOME_ARQ" ]; then
-                # Popup de Erro Rápido
-                mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_RED}┌──────────────────────────────────┐${RESET}"
-                mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_RED}│ ERRO: ORIGEM IGUAL AO DESTINO!   │${RESET}"
-                mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_RED}└──────────────────────────────────┘${RESET}"
+                mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_RED}┌────────────────────────────────────────────────┐${RESET}"
+                mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_RED}│ ✖ ERRO: O ARQUIVO JÁ EXISTE NESTA PASTA!       │${RESET}"
+                mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_RED}└────────────────────────────────────────────────┘${RESET}"
                 sleep 2
             else
-                # Desenho do Popup de Progresso
+                # 3. Desenho do Popup de Progresso
                 P_LIN=8; P_COL=15; L_BOX=50
                 mover_cursor $P_LIN $P_COL;      echo -e "${INFOBG}┌────────────────────────────────────────────────┐${RESET}"
-                mover_cursor $((P_LIN+1)) $P_COL; echo -e "${INFOBG}│ PROCESSANDO: $(printf '%-33.33s' "$NOME_ARQ") │${RESET}"
+                mover_cursor $((P_LIN+1)) $P_COL; echo -e "${INFOBG}│ $(printf ' %-46s' "ACAO: ${CLIP_ACAO^^} - $NOME_ARQ") │${RESET}"
                 mover_cursor $((P_LIN+2)) $P_COL; echo -e "${INFOBG}├────────────────────────────────────────────────┤${RESET}"
                 mover_cursor $((P_LIN+3)) $P_COL; echo -e "${INFOBG}│ Aguarde...                                     │${RESET}"
-                mover_cursor $((P_LIN+4)) $P_COL; echo -e "${INFOBG}└────────────────────────────────────────────────┘${RESET}"
+                mover_cursor $((P_LIN+4)) $P_COL; echo -e "${INFOBG}│ [░░░░░░░░░░░░░░░░░░░░░░░░░░░░░░]   0%           │${RESET}"
+                mover_cursor $((P_LIN+5)) $P_COL; echo -e "${INFOBG}└────────────────────────────────────────────────┘${RESET}"
 
                 if [ "$CLIP_ACAO" == "copy" ]; then
-                    # Executa rsync e joga a saída para um local temporário para não quebrar o layout
-                    # O segredo: mover o cursor para dentro do box ANTES do comando
-                    mover_cursor $((P_LIN+3)) $((P_COL+2))
-                    echo -ne "${FG_CYAN}"
+                    # Execução do Rsync com Barra Dinâmica
+                    stdbuf -oL rsync -ah --info=progress2 "$CLIP_ORIGEM" "$CLIP_DESTINO/" | tr '\r' '\n' | while read -r line; do
+                        if [[ "$line" == *"%"* ]]; then
+                            # Extração de dados
+                            INFO_RAW=$(echo "$line" | sed 's/^[[:space:]]*//')
+                            TRANS=$(echo "$INFO_RAW" | awk '{print $1}')
+                            PERC=$(echo "$INFO_RAW" | awk '{print $2}' | tr -dc '0-9')
+                            VELO=$(echo "$INFO_RAW" | awk '{print $3}')
 
-                    # Usamos stdbuf para garantir que o progresso apareça em tempo real
-                    rsync -ah --info=progress2 "$CLIP_ORIGEM" "$CLIP_DESTINO/" | tr '\r' '\n' | while read -r line; do
-                         # Só imprime se a linha tiver dados de progresso (evita pular linha)
-                         if [[ "$line" == *"%"* ]]; then
-                             mover_cursor $((P_LIN+3)) $((P_COL+2))
-                             echo -ne "Progresso: $(printf '%-40.40s' "$line")"
-                         fi
+                            [ -z "$PERC" ] && PERC=0
+
+                            # Cálculo da Barra
+                            BAR_WIDTH=30
+                            FILLED=$(( PERC * BAR_WIDTH / 100 ))
+                            EMPTY=$(( BAR_WIDTH - FILLED ))
+                            BARRA=$(printf "%${FILLED}s" | tr ' ' '█')
+                            VAZIO=$(printf "%${EMPTY}s" | tr ' ' '░')
+
+                            # Atualização Visual
+                            mover_cursor $((P_LIN+3)) $((P_COL+2))
+                            echo -ne "${INFOBG}${FG_CYAN}Enviado: $TRANS | Vel: $VELO            ${RESET}"
+                            mover_cursor $((P_LIN+4)) $((P_COL+2))
+                            echo -ne "${INFOBG}${FG_GREEN}[$BARRA$VAZIO] ${PERC}%${RESET}"
+                        fi
                     done
-                    echo -ne "${RESET}"
                 else
+                    # Ação de Mover
                     mv -v "$CLIP_ORIGEM" "$CLIP_DESTINO/"
                     rm "$CB_PATH" "$CB_ACT"
                 fi
 
-                mover_cursor $((P_LIN+3)) $((P_COL+2))
-                echo -e "${FG_GREEN}✔ Concluído com sucesso!                         ${RESET}"
+                # Finalização
+                mover_cursor $((P_LIN+4)) $((P_COL+2))
+                echo -e "${INFOBG}${FG_GREEN}✔ OPERAÇÃO CONCLUÍDA!                            ${RESET}"
                 sleep 1.5
             fi
-        else
-            # Popup de Aviso Vazio
-            mover_cursor $((LINHA+5)) $COLUNA; echo -e "${FG_YELLOW}┌──────────────────────────────────┐${RESET}"
-            mover_cursor $((LINHA+6)) $COLUNA; echo -e "${FG_YELLOW}│ AVISO: NADA PARA COLAR!          │${RESET}"
-            mover_cursor $((LINHA+7)) $COLUNA; echo -e "${FG_YELLOW}└──────────────────────────────────┘${RESET}"
-            sleep 1.5
         fi
         ;;
 
